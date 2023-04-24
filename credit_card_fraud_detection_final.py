@@ -30,10 +30,9 @@ if torch.cuda.is_available():
 else:
     DEVICE = "cpu"
 
-#df = pd.read_csv('../Project/creditcard.csv')
-#df.head()
+"""# Import dataset"""
 
-# Google Colab
+# Use Google Colab and import dataset from google drive
 
 from google.colab import drive
 drive.mount("/content/drive/")
@@ -43,10 +42,17 @@ df = pd.read_csv(proj_path +'creditcard.csv')
 
 df.head()
 
+"""# Explore dataset"""
+
+# Analyze the distribution of 'Time' features
+
 df1 = df[df['Class'] == 1]
-sns.kdeplot(df1['Time'], shade=True)
-sns.kdeplot(df['Time'], shade=True)
+sns.kdeplot(df1['Time'], shade=True, label='Class 1 Fraud')
+sns.kdeplot(df['Time'], shade=True,label='All Classes')
 plt.title('Density plot of Time')
+plt.legend()
+
+# Analyze the distribution of 'Amount' features
 
 fig, axs = plt.subplots(ncols=2, figsize=(15, 5))
 
@@ -57,29 +63,16 @@ sns.kdeplot(df1['Amount'], shade=True, ax=axs[0])
 sns.kdeplot(df['Amount'], shade=True, ax=axs[1])
 
 # set the titles of the subplots
-axs[0].set_title('Density plot of Fraud')
-axs[1].set_title('Density plot of all data')
+axs[0].set_title('Density plot of Amount for Fraud')
+axs[1].set_title('Density plot of Amount for all data')
 
-# Check the distribution of the target variable ('Class'):
-
+# Check the distribution of the target variable ('Class')
 print("Class Distribution:")
 print(df['Class'].value_counts())
 
 # Plot the class distribution
 sns.countplot(x='Class', data=df)
 plt.title("Class Distribution")
-plt.show()
-
-# Analyze the distribution of 'Time' and 'Amount' features:
-
-fig, axes = plt.subplots(1, 2, figsize=(18, 4))
-
-sns.distplot(df['Time'], ax=axes[0], color='blue')
-axes[0].set_title("Time Distribution")
-
-sns.distplot(df['Amount'], ax=axes[1], color='red')
-axes[1].set_title("Amount Distribution")
-
 plt.show()
 
 # Check the correlation between features:
@@ -92,12 +85,29 @@ sns.heatmap(corr_matrix, cmap='coolwarm', annot=True, annot_kws={'size':5})
 plt.title("Correlation Heatmap")
 plt.show()
 
+# Check the correlation between features and class variables
+corr_Class = df.corr()['Class']
+corr_Class = corr_Class[:-1].abs().sort_values(ascending = False)
+
+plt.figure(figsize=(12,7.5))
+corr_Class.plot(kind='bar')
+plt.xlabel('Feature')
+plt.ylabel('Correlation')
+plt.title('Correlations between features and the Class variables')
+plt.show()
+
+"""# Build Model
+
+## Normalize the dataset
+"""
+
 # Normalize the 'Time' and 'Amount' features:
 
 scaler = StandardScaler()
-
 df['Time'] = scaler.fit_transform(df['Time'].values.reshape(-1, 1))
 df['Amount'] = scaler.fit_transform(df['Amount'].values.reshape(-1, 1))
+
+"""## Split the dataset into train and test"""
 
 # Split the dataset into train and test sets:
 
@@ -112,11 +122,12 @@ print("Train set shape:", X_train.shape)
 print("Test set shape:", X_test.shape)
 
 # Convert data to PyTorch tensors
-
 X_train = torch.tensor(X_train.values, dtype=torch.float)
 X_test = torch.tensor(X_test.values, dtype=torch.float)
 y_train = torch.tensor(y_train.values, dtype=torch.float).unsqueeze(1)
 y_test = torch.tensor(y_test.values, dtype=torch.float).unsqueeze(1)
+
+"""## LSTM Model"""
 
 # Create a custom dataset class and data loaders:
 
@@ -172,6 +183,77 @@ class LSTMModelBase(nn.Module):
         out = self.fc(out[:, -1, :])
         return out
 
+"""## LSTM base model"""
+
+# LSTM Base Model
+
+# Instantiate the model, loss function, and optimizer:
+modelBase = LSTMModelBase(input_size = 30, hidden_size = 50, num_layers = 1, output_size = 1)
+
+modelBase
+
+criterionBase = nn.BCEWithLogitsLoss()
+
+optimizerBase = optim.Adam(modelBase.parameters(), lr=0.001)
+
+
+# Train the model:
+
+# Record the start time for measuring the training duration
+start_timeBase = time.time()
+
+num_epochsBase = 10
+
+for epoch in range(num_epochsBase):
+    for i, (features, targets) in enumerate(train_loader):
+        featuresBase = features.unsqueeze(1)
+        targetsBase = targets
+
+        # Forward pass
+        logitsBase = modelBase(featuresBase)
+        lossBase = criterionBase(logitsBase, targetsBase)
+
+        # Backward and optimize
+        optimizerBase.zero_grad()
+        lossBase.backward()
+        optimizerBase.step()
+
+    print(f'Epoch [{epoch+1}/{num_epochsBase}], Loss: {lossBase.item():.4f}')
+
+
+# Print the total training time
+print('Total Training Time: %.2f min' % ((time.time() - start_timeBase)/60))
+
+
+# Evaluate the model:
+
+modelBase.eval()
+targets_listBase = []
+predicted_listBase = []
+
+with torch.no_grad():
+    for features, targets in test_loader:
+        featuresBase = features.unsqueeze(1)
+        targetsBase = targets
+        logitsBase = modelBase(featuresBase)
+        predictedBase = torch.sigmoid(logitsBase).round()
+
+        targets_listBase.extend(targetsBase.cpu().numpy())
+        predicted_listBase.extend(predictedBase.cpu().numpy())
+
+# Calculate metrics
+accuracy_Base = accuracy_score(targets_listBase, predicted_listBase)
+precision_Base = precision_score(targets_listBase, predicted_listBase)
+recall_Base = recall_score(targets_listBase, predicted_listBase)
+f1_Base = f1_score(targets_listBase, predicted_listBase)
+
+print(f'Accuracy: {accuracy_Base:.4f}')
+print(f'Precision: {precision_Base:.4f}')
+print(f'Recall: {recall_Base:.4f}')
+print(f'F1 Score: {f1_Base:.4f}')
+
+"""### LSTM experimental model"""
+
 # Define the LSTM experimental model:
 
 class LSTMModel(nn.Module):
@@ -199,7 +281,7 @@ class LSTMModel(nn.Module):
 # Instantiate the model, loss function, and optimizer:
 model = LSTMModel(input_size = 30, hidden_size = 70, num_layers = 3, output_size = 1)
 
-model.to(DEVICE)
+#model.to(DEVICE)
 
 pos_weight = torch.tensor([1])
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -224,8 +306,8 @@ model.train()
 
 for epoch in range(num_epochs):
     for i, (features, targets) in enumerate(train_loader):
-        features = features.unsqueeze(1).to(DEVICE)
-        targets = targets.to(DEVICE)
+        features = features.unsqueeze(1)
+        targets = targets
 
         # Forward pass
         logits = model(features)
@@ -276,8 +358,8 @@ with torch.no_grad():
     y_true = []
     y_pred = []
     for features, targets in train_loader:
-        features = features.unsqueeze(1).to(DEVICE)
-        targets = targets.to(DEVICE)
+        features = features.unsqueeze(1)
+        targets = targets
         logits = model(features)
         preds = (torch.sigmoid(logits) >= threshold).int()
         y_true += targets.tolist()
@@ -287,7 +369,9 @@ with torch.no_grad():
 
 print(f'Training F1 Score: {f1:.4f}')
 
-# Evaluate the model(Train):
+"""### Result for train set"""
+
+# Evaluate the model(Train with default threshold):
 
 model.eval()
 targets_list = []
@@ -295,8 +379,8 @@ predicted_list = []
 
 with torch.no_grad():
     for features, targets in train_loader:
-        features = features.unsqueeze(1).to(DEVICE)
-        targets = targets.to(DEVICE)
+        features = features.unsqueeze(1)
+        targets = targets
         logits = model(features)
         predicted = torch.sigmoid(logits).round()
 
@@ -314,15 +398,15 @@ print(f'Precision: {precision:.4f}')
 print(f'Recall: {recall:.4f}')
 print(f'F1 Score: {f1:.4f}')
 
-# Evaluate the model(Train):
+# Evaluate the model(Train with optimal threshold):
 model.eval()
 targets_list = []
 predicted_list = []
 
 with torch.no_grad():
     for features, targets in train_loader:
-        features = features.unsqueeze(1).to(DEVICE)
-        targets = targets.to(DEVICE)
+        features = features.unsqueeze(1)
+        targets = targets
         logits = model(features)
         predicted = torch.sigmoid(logits).cpu().numpy()
 
@@ -363,7 +447,9 @@ print(f'Precision: {optimal_precision:.4f}')
 print(f'Recall: {optimal_recall:.4f}')
 print(f'F1_scores : {2 * (optimal_precision * optimal_recall) / (optimal_precision + optimal_recall) :.4f}')
 
-# Evaluate the model(Testing):
+"""### Result for test set"""
+
+# Evaluate the model(Testing with default threshold):
 
 model.eval()
 targets_list = []
@@ -371,8 +457,8 @@ predicted_list = []
 
 with torch.no_grad():
     for features, targets in test_loader:
-        features = features.unsqueeze(1).to(DEVICE)
-        targets = targets.to(DEVICE)
+        features = features.unsqueeze(1)
+        targets = targets
         logits = model(features)
         predicted = torch.sigmoid(logits).round()
 
@@ -390,7 +476,7 @@ print(f'Precision: {precision_experimental:.4f}')
 print(f'Recall: {recall_experimental:.4f}')
 print(f'F1 Score: {f1_experimental:.4f}')
 
-# Evaluate the model(Testing):
+# Evaluate the model(Testing with optimal threshold):
 
 model.eval()
 targets_list = []
@@ -398,8 +484,8 @@ predicted_list = []
 
 with torch.no_grad():
     for features, targets in test_loader:
-        features = features.unsqueeze(1).to(DEVICE)
-        targets = targets.to(DEVICE)
+        features = features.unsqueeze(1)
+        targets = targets
         logits = model(features)
         predicted = torch.sigmoid(logits).cpu().numpy()
 
@@ -435,78 +521,21 @@ optimal_idx = np.argmax(f1_scores)
 optimal_threshold = thresholds[optimal_idx]
 optimal_precision = precision[optimal_idx]
 optimal_recall = recall[optimal_idx]
+optimal_F1_scores=2 * (optimal_precision * optimal_recall) / (optimal_precision + optimal_recall)
+
+
+# Compute accuracy score
+binary_predictions = [1 if x >= optimal_threshold else 0 for x in predicted_list]
+accuracy = accuracy_score(targets_list, binary_predictions)
+optimal_accuracy=accuracy
 
 print(f'Threshold: {optimal_threshold:.4f}')
+print(f'Accuracy : {optimal_accuracy:.4f}')
 print(f'Precision: {optimal_precision:.4f}')
 print(f'Recall: {optimal_recall:.4f}')
-print(f'F1_scores : {2 * (optimal_precision * optimal_recall) / (optimal_precision + optimal_recall) :.4f}')
+print(f'F1_scores : { optimal_F1_scores:.4f}')
 
-# LSTM Base Model
-
-# Instantiate the model, loss function, and optimizer:
-modelBase = LSTMModelBase(input_size = 30, hidden_size = 50, num_layers = 1, output_size = 1)
-
-modelBase.to(DEVICE)
-
-criterionBase = nn.BCEWithLogitsLoss()
-
-optimizerBase = optim.Adam(modelBase.parameters(), lr=0.001)
-
-
-# Train the model:
-
-# Record the start time for measuring the training duration
-start_timeBase = time.time()
-
-num_epochsBase = 10
-
-for epoch in range(num_epochsBase):
-    for i, (features, targets) in enumerate(train_loader):
-        featuresBase = features.unsqueeze(1).to(DEVICE)
-        targetsBase = targets.to(DEVICE)
-
-        # Forward pass
-        logitsBase = modelBase(featuresBase)
-        lossBase = criterion(logitsBase, targetsBase)
-
-        # Backward and optimize
-        optimizerBase.zero_grad()
-        lossBase.backward()
-        optimizerBase.step()
-
-    print(f'Epoch [{epoch+1}/{num_epochsBase}], Loss: {lossBase.item():.4f}')
-
-
-# Print the total training time
-print('Total Training Time: %.2f min' % ((time.time() - start_timeBase)/60))
-
-
-# Evaluate the model:
-
-modelBase.eval()
-targets_listBase = []
-predicted_listBase = []
-
-with torch.no_grad():
-    for features, targets in test_loader:
-        featuresBase = features.unsqueeze(1).to(DEVICE)
-        targetsBase = targets.to(DEVICE)
-        logitsBase = modelBase(featuresBase)
-        predictedBase = torch.sigmoid(logitsBase).round()
-
-        targets_listBase.extend(targetsBase.cpu().numpy())
-        predicted_listBase.extend(predictedBase.cpu().numpy())
-
-# Calculate metrics
-accuracy_Base = accuracy_score(targets_listBase, predicted_listBase)
-precision_Base = precision_score(targets_listBase, predicted_listBase)
-recall_Base = recall_score(targets_listBase, predicted_listBase)
-f1_Base = f1_score(targets_listBase, predicted_listBase)
-
-print(f'Accuracy: {accuracy_Base:.4f}')
-print(f'Precision: {precision_Base:.4f}')
-print(f'Recall: {recall_Base:.4f}')
-print(f'F1 Score: {f1_Base:.4f}')
+"""## Compare the LSTM base model with the LSTM experimental model."""
 
 # Compare the LSTM base model with the LSTM experimental model.
 
@@ -514,11 +543,12 @@ import pandas as pd
 
 # Combine the results into a dictionary
 results = {
-    'Model': ['LSTM Base', 'LSTM Expe'],
-    'Accuracy': [accuracy_Base, accuracy_experimental],
-    'Precision': [precision_Base, precision_experimental],
-    'Recall': [recall_Base, recall_experimental],
-    'F1 Score': [f1_Base, f1_experimental]
+    'Model': ['LSTM Base', 'LSTM Expe1','LSTM Expe2'],
+    'Accuracy': [accuracy_Base, accuracy_experimental,optimal_accuracy],
+    'Precision': [precision_Base, precision_experimental,optimal_precision],
+    'Recall': [recall_Base, recall_experimental,optimal_recall],
+    'F1 Score': [f1_Base, f1_experimental,optimal_F1_scores],
+    'Threshold': [0.5,0.5,optimal_threshold]
 }
 
 # Create a pandas DataFrame from the dictionary
@@ -526,3 +556,5 @@ results_df = pd.DataFrame(results)
 
 # Display the table
 print(results_df)
+
+"""**From the above results, we can see that LSTM experimental model has an optimal threshold of around 0.5. The highest F1 score is 0.879121 (With rrecision to be 0.952381 and recall to be 0.816327) and the accuracy rate is 0.999614.**"""
