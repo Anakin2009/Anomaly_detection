@@ -557,4 +557,4 @@ results_df = pd.DataFrame(results)
 # Display the table
 print(results_df)
 
-"""**From the above results, we can see that LSTM experimental model has an optimal threshold of around 0.5. The highest F1 score is 0.879121 (With rrecision to be 0.952381 and recall to be 0.816327) and the accuracy rate is 0.999614.**"""
+"""**From the above results, we can see that LSTM experimental model has an optimal threshold of around 0.5. The highest F1 score is 0.879121 (With precision to be 0.952381 and recall to be 0.816327) and the accuracy rate is 0.999614.**"""
